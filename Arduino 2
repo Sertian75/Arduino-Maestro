@@ -1,0 +1,174 @@
+#include <Wire.h>
+#include <LiquidCrystal.h>
+
+const int pinRojo = 13;
+const int pinVerde = 11;
+const int pinAzul = 12;
+
+LiquidCrystal lcd(2, 3, 4, 5, 6, 7);
+String input = ""; // Almacena los dígitos presionados y operadores
+String result = ""; // Almacena el resultado
+bool secondNumberEntered = false; // Indica si el segundo número ha sido ingresado
+
+void setup() {
+  Wire.begin(2);
+  Wire.onReceive(receiveEvent);
+  lcd.begin(16, 2);
+  
+  pinMode(pinRojo, OUTPUT);
+  pinMode(pinVerde, OUTPUT);
+  pinMode(pinAzul, OUTPUT);
+
+  // Encender el LED en color amarillo (Rojo + Verde) durante 1 segundo
+  digitalWrite(pinRojo, HIGH);
+  digitalWrite(pinVerde, HIGH);
+  digitalWrite(pinAzul, LOW);
+  delay(1000);
+  
+  // Apagar el LED
+  digitalWrite(pinRojo, LOW);
+  digitalWrite(pinVerde, LOW);
+  digitalWrite(pinAzul, LOW);
+  
+  lcd.clear();
+}
+
+void loop() {
+  delay(100); 
+}
+
+void receiveEvent(int howMany) {
+  while (Wire.available()) {
+    char c = Wire.read();
+    
+    // Encender el LED en color rojo por 100 ms
+    digitalWrite(pinRojo, HIGH);
+    delay(100);
+    digitalWrite(pinRojo, LOW);
+    
+    if (c == '=') {
+      result = calculate(input); // Realizar el cálculo
+      lcd.setCursor(0, 1); // Mover el cursor a la segunda línea
+      lcd.print(result); // Mostrar el resultado
+      
+      // Encender el LED en color cian (Verde + Azul)
+      digitalWrite(pinVerde, HIGH);
+      digitalWrite(pinAzul, HIGH);
+    } else if (c == 'C') {
+      // Resetear el input y el resultado
+      input = "";
+      result = "";
+      secondNumberEntered = false;
+      lcd.clear();
+      
+      // Apagar el LED
+      digitalWrite(pinVerde, LOW);
+      digitalWrite(pinAzul, LOW);
+    } else {
+      // Verificaciones adicionales
+      if (isOperator(c)) {
+        if (input.length() == 0 || isOperator(input[input.length() - 1]) || secondNumberEntered) {
+          continue; // Ignorar el operador si no hay números, si el último carácter es un operador o si ya se ingresó el segundo número
+        }
+      }
+      
+      // Agregar el carácter al input solo si no excede los 4 dígitos para cada operando
+      if (isDigit(c)) {
+        int operatorPos = findOperatorPosition(input);
+        if ((operatorPos == -1 && input.length() < 4) || 
+            (operatorPos != -1 && input.length() - operatorPos - 1 < 4)) {
+          input += c;
+          
+          // Marcar que el segundo número ha sido ingresado si ya hay un operador
+          if (operatorPos != -1) {
+            secondNumberEntered = true;
+          }
+        }
+      } else {
+        input += c;
+      }
+      lcd.setCursor(0, 0); // Mover el cursor a la primera línea
+      lcd.print(input); // Mostrar el input
+    }
+  }
+}
+
+// Función para encontrar la posición del operador en la cadena de entrada
+int findOperatorPosition(String expr) {
+  int len = expr.length();
+  for (int i = 0; i < len; i++) {
+    if (expr[i] == '+' || expr[i] == '-' || expr[i] == '*' || expr[i] == '/') {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Función para determinar si un carácter es un operador
+bool isOperator(char c) {
+  return c == '+' || c == '-' || c == '*' || c == '/';
+}
+
+// Función para determinar si un carácter es un dígito
+bool isDigit(char c) {
+  return c >= '0' && c <= '9';
+}
+
+// Función para realizar cálculos básicos
+String calculate(String expr) {
+  int len = expr.length();
+  char oper = 0;
+  String operand1Str = "", operand2Str = "";
+  bool firstOperand = true;
+  
+  for (int i = 0; i < len; i++) {
+    char c = expr[i];
+    if (isDigit(c)) {
+      if (firstOperand) {
+        operand1Str += c;
+      } else {
+        operand2Str += c;
+      }
+    } else {
+      if (c == '+' || c == '-' || c == '*' || c == '/') {
+        oper = c;
+        firstOperand = false;
+      }
+    }
+  }
+  
+  if (operand1Str.length() > 4 || operand2Str.length() > 4) {
+    return "Err"; // Error si los operandos exceden los 4 dígitos
+  }
+
+  long operand1 = operand1Str.toInt();
+  long operand2 = operand2Str.toInt();
+  long result1= 0;
+  float result2 = 0;
+  String resultStr = "";
+
+  switch (oper) {
+    case '+': 
+      result1 = operand1 + operand2; 
+      resultStr = String(result1); // Mostrar como entero
+      break;
+    case '-': 
+      result1 = operand1 - operand2; 
+      resultStr = String(result1); // Mostrar como entero
+      break;
+    case '*': 
+      result1 = operand1 * operand2; 
+      resultStr = String(result1); // Mostrar como entero
+      break;
+    case '/': 
+      if (operand2 != 0) {
+        result2 = (float)operand1 / operand2; 
+        resultStr = String(result2, 2); // Mostrar hasta 2 decimales
+      } else {
+        resultStr = "Err"; // Manejo de división por cero
+      }
+      break;
+  }
+
+  return resultStr;
+}
